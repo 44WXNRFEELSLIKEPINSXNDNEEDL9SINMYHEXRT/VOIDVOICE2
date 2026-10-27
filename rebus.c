@@ -13,8 +13,12 @@ static int word_count;
 static char letters[10];
 static int letter_count;
 
-static int digit_of[26];
-static int used[10];
+static int idx[MAX_WORDS][MAX_LEN];
+static int wlen[MAX_WORDS];
+static int lead[MAX_WORDS];
+static int lead_count;
+
+static int digit[10];
 
 static int parse(const char *s)
 {
@@ -61,41 +65,55 @@ static int collect_letters(void)
     return 1;
 }
 
-static long long word_value(const char *w)
+static void precompute(void)
+{
+    int index_of[26];
+    for (int k = 0; k < letter_count; k++)
+        index_of[letters[k] - 'A'] = k;
+
+    lead_count = 0;
+    for (int w = 0; w < word_count; w++) {
+        wlen[w] = (int)strlen(words[w]);
+        for (int i = 0; i < wlen[w]; i++)
+            idx[w][i] = index_of[words[w][i] - 'A'];
+        if (wlen[w] > 1)
+            lead[lead_count++] = idx[w][0];
+    }
+}
+
+static long long word_value(int w)
 {
     long long v = 0;
-    for (int i = 0; w[i]; i++)
-        v = v * 10 + digit_of[w[i] - 'A'];
+    for (int i = 0; i < wlen[w]; i++)
+        v = v * 10 + digit[idx[w][i]];
     return v;
 }
 
 static int check(void)
 {
-    for (int w = 0; w < word_count; w++) {
-        if (strlen(words[w]) > 1 && digit_of[words[w][0] - 'A'] == 0)
+    for (int k = 0; k < lead_count; k++) {
+        if (digit[lead[k]] == 0)
             return 0;
     }
 
     long long sum = 0;
     for (int w = 0; w < word_count - 1; w++)
-        sum += word_value(words[w]);
+        sum += word_value(w);
 
-    return sum == word_value(words[word_count - 1]);
+    return sum == word_value(word_count - 1);
 }
 
-static int search(int pos)
+static int search(int pos, int used)
 {
     if (pos == letter_count)
         return check();
 
     for (int d = 0; d < 10; d++) {
-        if (used[d])
+        if (used & (1 << d))
             continue;
-        used[d] = 1;
-        digit_of[letters[pos] - 'A'] = d;
-        if (search(pos + 1))
+        digit[pos] = d;
+        if (search(pos + 1, used | (1 << d)))
             return 1;
-        used[d] = 0;
     }
     return 0;
 }
@@ -105,17 +123,17 @@ char *solve_rebus(const char *rebus)
     if (!parse(rebus) || !collect_letters())
         return NULL;
 
-    memset(used, 0, sizeof(used));
-    if (!search(0))
+    precompute();
+    if (!search(0, 0))
         return NULL;
 
     char *out = malloc(word_count * (MAX_LEN + 4) + 1);
     out[0] = '\0';
     for (int w = 0; w < word_count; w++) {
         char buf[MAX_LEN + 4];
-        for (int i = 0; words[w][i]; i++)
-            buf[i] = (char)('0' + digit_of[words[w][i] - 'A']);
-        buf[strlen(words[w])] = '\0';
+        for (int i = 0; i < wlen[w]; i++)
+            buf[i] = (char)('0' + digit[idx[w][i]]);
+        buf[wlen[w]] = '\0';
 
         strcat(out, buf);
         if (w < word_count - 2)
