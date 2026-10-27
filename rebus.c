@@ -18,7 +18,13 @@ static int wlen[MAX_WORDS];
 static int is_lead[10];
 
 static int digit[10];
-static long long coef[10];
+
+static int ncols;
+static int ready[MAX_LEN];
+static int col_add[MAX_LEN][MAX_WORDS];
+static int col_add_n[MAX_LEN];
+static int col_res[MAX_LEN];
+static int carry[MAX_LEN + 1];
 
 static int parse(const char *s)
 {
@@ -67,50 +73,97 @@ static int collect_letters(void)
 
 static void precompute(void)
 {
-    int index_of[26];
-    for (int k = 0; k < letter_count; k++)
-        index_of[letters[k] - 'A'] = k;
+    int ord_of[26];
+    for (int c = 0; c < 26; c++)
+        ord_of[c] = -1;
 
-    for (int k = 0; k < letter_count; k++) {
-        coef[k] = 0;
-        is_lead[k] = 0;
-    }
+    ncols = 0;
     for (int w = 0; w < word_count; w++) {
         wlen[w] = (int)strlen(words[w]);
-        for (int i = 0; i < wlen[w]; i++)
-            idx[w][i] = index_of[words[w][i] - 'A'];
-        long long weight = 1;
-        for (int i = wlen[w] - 1; i >= 0; i--) {
-            if (w < word_count - 1)
-                coef[idx[w][i]] += weight;
-            else
-                coef[idx[w][i]] -= weight;
-            weight *= 10;
+        if (wlen[w] > ncols)
+            ncols = wlen[w];
+    }
+
+    int cnt = 0;
+    for (int c = 0; c < ncols; c++) {
+        for (int w = 0; w < word_count; w++) {
+            if (wlen[w] <= c)
+                continue;
+            char ch = words[w][wlen[w] - 1 - c];
+            if (ord_of[ch - 'A'] < 0) {
+                ord_of[ch - 'A'] = cnt;
+                letters[cnt++] = ch;
+            }
         }
+    }
+
+    for (int k = 0; k < letter_count; k++)
+        is_lead[k] = 0;
+    for (int w = 0; w < word_count; w++) {
+        for (int i = 0; i < wlen[w]; i++)
+            idx[w][i] = ord_of[words[w][i] - 'A'];
         if (wlen[w] > 1)
             is_lead[idx[w][0]] = 1;
     }
+
+    int prev_ready = 0;
+    for (int c = 0; c < ncols; c++) {
+        int last = 0;
+        col_add_n[c] = 0;
+        col_res[c] = -1;
+        for (int w = 0; w < word_count; w++) {
+            if (wlen[w] <= c)
+                continue;
+            int k = idx[w][wlen[w] - 1 - c];
+            if (k > last)
+                last = k;
+            if (w < word_count - 1)
+                col_add[c][col_add_n[c]++] = k;
+            else
+                col_res[c] = k;
+        }
+        ready[c] = last > prev_ready ? last : prev_ready;
+        prev_ready = ready[c];
+    }
+    carry[0] = 0;
 }
 
-static int check(void)
+static int check_column(int c)
 {
-    long long sum = 0;
-    for (int k = 0; k < letter_count; k++)
-        sum += coef[k] * digit[k];
+    int sum = carry[c];
+    for (int j = 0; j < col_add_n[c]; j++)
+        sum += digit[col_add[c][j]];
 
-    return sum == 0;
+    int expected = col_res[c] >= 0 ? digit[col_res[c]] : 0;
+    if (sum % 10 != expected)
+        return 0;
+
+    carry[c + 1] = sum / 10;
+    if (c == ncols - 1 && carry[c + 1] != 0)
+        return 0;
+    return 1;
 }
 
-static int search(int pos, int used)
+static int search(int pos, int used, int col)
 {
     if (pos == letter_count)
-        return check();
+        return 1;
 
     for (int d = is_lead[pos]; d < 10; d++) {
         if (used & (1 << d))
             continue;
         digit[pos] = d;
-        if (search(pos + 1, used | (1 << d)))
+
+        int c = col;
+        int ok = 1;
+        while (c < ncols && ready[c] == pos) {
+            if (!check_column(c)) {
+                ok = 0;
+                break;
+            }
+            c++;
+        }
+        if (ok && search(pos + 1, used | (1 << d), c))
             return 1;
     }
     return 0;
@@ -122,7 +175,7 @@ char *solve_rebus(const char *rebus)
         return NULL;
 
     precompute();
-    if (!search(0, 0))
+    if (!search(0, 0, 0))
         return NULL;
 
     char *out = malloc(word_count * (MAX_LEN + 4) + 1);
