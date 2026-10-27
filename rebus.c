@@ -16,6 +16,8 @@ static int letter_count;
 static int idx[MAX_WORDS][MAX_LEN];
 static int wlen[MAX_WORDS];
 static int is_lead[10];
+static int max_digit[10];
+static int forced_col[10];
 
 static int digit[10];
 
@@ -84,6 +86,7 @@ static void precompute(void)
             ncols = wlen[w];
     }
 
+    int intro_col[10];
     int cnt = 0;
     for (int c = 0; c < ncols; c++) {
         for (int w = 0; w < word_count; w++) {
@@ -92,19 +95,31 @@ static void precompute(void)
             char ch = words[w][wlen[w] - 1 - c];
             if (ord_of[ch - 'A'] < 0) {
                 ord_of[ch - 'A'] = cnt;
+                intro_col[cnt] = c;
                 letters[cnt++] = ch;
             }
         }
     }
 
-    for (int k = 0; k < letter_count; k++)
+    for (int k = 0; k < letter_count; k++) {
         is_lead[k] = 0;
+        max_digit[k] = 9;
+        forced_col[k] = -1;
+    }
     for (int w = 0; w < word_count; w++) {
         for (int i = 0; i < wlen[w]; i++)
             idx[w][i] = ord_of[words[w][i] - 'A'];
         if (wlen[w] > 1)
             is_lead[idx[w][0]] = 1;
     }
+
+    int max_add = 0;
+    for (int w = 0; w < word_count - 1; w++) {
+        if (wlen[w] > max_add)
+            max_add = wlen[w];
+    }
+    if (wlen[word_count - 1] == max_add + 1)
+        max_digit[idx[word_count - 1][0]] = word_count - 2;
 
     int prev_ready = 0;
     for (int c = 0; c < ncols; c++) {
@@ -124,6 +139,15 @@ static void precompute(void)
         }
         ready[c] = last > prev_ready ? last : prev_ready;
         prev_ready = ready[c];
+        if (col_res[c] >= 0 && intro_col[col_res[c]] == c) {
+            int in_add = 0;
+            for (int j = 0; j < col_add_n[c]; j++) {
+                if (col_add[c][j] == col_res[c])
+                    in_add = 1;
+            }
+            if (!in_add)
+                forced_col[col_res[c]] = c;
+        }
     }
     carry[0] = 0;
 }
@@ -149,7 +173,19 @@ static int search(int pos, int used, int col)
     if (pos == letter_count)
         return 1;
 
-    for (int d = is_lead[pos]; d < 10; d++) {
+    int lo = is_lead[pos];
+    int hi = max_digit[pos];
+    if (forced_col[pos] >= 0) {
+        int c = forced_col[pos];
+        int sum = carry[c];
+        for (int j = 0; j < col_add_n[c]; j++)
+            sum += digit[col_add[c][j]];
+        lo = hi = sum % 10;
+        if (lo < is_lead[pos] || lo > max_digit[pos])
+            return 0;
+    }
+
+    for (int d = lo; d <= hi; d++) {
         if (used & (1 << d))
             continue;
         digit[pos] = d;
