@@ -19,6 +19,7 @@ static int lead[MAX_WORDS];
 static int lead_count;
 
 static int digit[10];
+static long long coef[10];
 
 static int parse(const char *s)
 {
@@ -72,21 +73,23 @@ static void precompute(void)
         index_of[letters[k] - 'A'] = k;
 
     lead_count = 0;
+    for (int k = 0; k < letter_count; k++)
+        coef[k] = 0;
     for (int w = 0; w < word_count; w++) {
         wlen[w] = (int)strlen(words[w]);
         for (int i = 0; i < wlen[w]; i++)
             idx[w][i] = index_of[words[w][i] - 'A'];
+        long long weight = 1;
+        for (int i = wlen[w] - 1; i >= 0; i--) {
+            if (w < word_count - 1)
+                coef[idx[w][i]] += weight;
+            else
+                coef[idx[w][i]] -= weight;
+            weight *= 10;
+        }
         if (wlen[w] > 1)
             lead[lead_count++] = idx[w][0];
     }
-}
-
-static long long word_value(int w)
-{
-    long long v = 0;
-    for (int i = 0; i < wlen[w]; i++)
-        v = v * 10 + digit[idx[w][i]];
-    return v;
 }
 
 static int check(void)
@@ -97,10 +100,10 @@ static int check(void)
     }
 
     long long sum = 0;
-    for (int w = 0; w < word_count - 1; w++)
-        sum += word_value(w);
+    for (int k = 0; k < letter_count; k++)
+        sum += coef[k] * digit[k];
 
-    return sum == word_value(word_count - 1);
+    return sum == 0;
 }
 
 static int search(int pos, int used)
