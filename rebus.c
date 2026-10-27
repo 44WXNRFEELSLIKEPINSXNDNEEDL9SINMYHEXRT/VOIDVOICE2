@@ -15,8 +15,7 @@ static int letter_count;
 
 static int idx[MAX_WORDS][MAX_LEN];
 static int wlen[MAX_WORDS];
-static int lead[MAX_WORDS];
-static int lead_count;
+static int is_lead[10];
 
 static int digit[10];
 static long long coef[10];
@@ -72,9 +71,10 @@ static void precompute(void)
     for (int k = 0; k < letter_count; k++)
         index_of[letters[k] - 'A'] = k;
 
-    lead_count = 0;
-    for (int k = 0; k < letter_count; k++)
+    for (int k = 0; k < letter_count; k++) {
         coef[k] = 0;
+        is_lead[k] = 0;
+    }
     for (int w = 0; w < word_count; w++) {
         wlen[w] = (int)strlen(words[w]);
         for (int i = 0; i < wlen[w]; i++)
@@ -88,17 +88,12 @@ static void precompute(void)
             weight *= 10;
         }
         if (wlen[w] > 1)
-            lead[lead_count++] = idx[w][0];
+            is_lead[idx[w][0]] = 1;
     }
 }
 
 static int check(void)
 {
-    for (int k = 0; k < lead_count; k++) {
-        if (digit[lead[k]] == 0)
-            return 0;
-    }
-
     long long sum = 0;
     for (int k = 0; k < letter_count; k++)
         sum += coef[k] * digit[k];
@@ -111,7 +106,7 @@ static int search(int pos, int used)
     if (pos == letter_count)
         return check();
 
-    for (int d = 0; d < 10; d++) {
+    for (int d = is_lead[pos]; d < 10; d++) {
         if (used & (1 << d))
             continue;
         digit[pos] = d;
